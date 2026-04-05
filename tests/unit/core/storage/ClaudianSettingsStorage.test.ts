@@ -24,6 +24,10 @@ describe('ClaudianSettingsStorage', () => {
     storage = new ClaudianSettingsStorage(mockAdapter);
   });
 
+  it('uses 5mghost namespaced settings path', () => {
+    expect(CLAUDIAN_SETTINGS_PATH).toBe('.claude/5mghost-claudian-settings.json');
+  });
+
   describe('load', () => {
     it('should return defaults when file does not exist', async () => {
       mockAdapter.exists.mockResolvedValue(false);

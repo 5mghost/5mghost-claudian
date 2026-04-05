@@ -281,9 +281,9 @@
     },
     "cliPath": {
       "name": "Claude CLI path",
-      "desc": "Custom path to Claude Code CLI. Leave empty for auto-detection.",
-      "descWindows": "For the native installer, use claude.exe. For npm/pnpm/yarn or other package manager installs, use the cli.js path (not claude.cmd).",
-      "descUnix": "Paste the output of \"which claude\" — works for both native and npm/pnpm/yarn installs.",
+      "desc": "Custom path to Claude Code CLI. Leave empty for auto-detection (prefers claude-internal, then claude).",
+      "descWindows": "For internal/native installers, use claude-internal.exe or claude.exe. For npm/pnpm/yarn or other package manager installs, use the cli.js path (not claude.cmd).",
+      "descUnix": "Paste the output of \"which claude-internal\" (preferred) or \"which claude\".",
       "validation": {
         "notExist": "Path does not exist",
         "isDirectory": "Path is a directory, not a file"

@@ -1,8 +1,8 @@
-# Claudian
+# 5mghost Claudian
 
-![GitHub stars](https://img.shields.io/github/stars/YishenTu/claudian?style=social)
-![GitHub release](https://img.shields.io/github/v/release/YishenTu/claudian)
-![License](https://img.shields.io/github/license/YishenTu/claudian)
+![GitHub stars](https://img.shields.io/github/stars/5mghost/5mghost-claudian?style=social)
+![GitHub release](https://img.shields.io/github/v/release/5mghost/5mghost-claudian)
+![License](https://img.shields.io/github/license/5mghost/5mghost-claudian)
 
 ![Preview](Preview.png)
 
@@ -36,14 +36,14 @@ An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. 
 
 ### From GitHub Release (recommended)
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/YishenTu/claudian/releases/latest)
-2. Create a folder called `claudian` in your vault's plugins folder:
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/5mghost/5mghost-claudian/releases/latest)
+2. Create a folder called `5mghost-claudian` in your vault's plugins folder:
    ```
-   /path/to/vault/.obsidian/plugins/claudian/
+   /path/to/vault/.obsidian/plugins/5mghost-claudian/
    ```
-3. Copy the downloaded files into the `claudian` folder
+3. Copy the downloaded files into the `5mghost-claudian` folder
 4. Enable the plugin in Obsidian:
-   - Settings → Community plugins → Enable "Claudian"
+   - Settings → Community plugins → Enable "5mghost Claudian"
 
 ### Using BRAT
 
@@ -52,9 +52,9 @@ An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. 
 1. Install the BRAT plugin from Obsidian Community Plugins
 2. Enable BRAT in Settings → Community plugins
 3. Open BRAT settings and click "Add Beta plugin"
-4. Enter the repository URL: `https://github.com/YishenTu/claudian`
-5. Click "Add Plugin" and BRAT will install Claudian automatically
-6. Enable Claudian in Settings → Community plugins
+4. Enter the repository URL: `https://github.com/5mghost/5mghost-claudian`
+5. Click "Add Plugin" and BRAT will install 5mghost Claudian automatically
+6. Enable 5mghost Claudian in Settings → Community plugins
 
 > **Tip**: BRAT will automatically check for updates and notify you when a new version is available.
 
@@ -63,8 +63,8 @@ An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. 
 1. Clone this repository into your vault's plugins folder:
    ```bash
    cd /path/to/vault/.obsidian/plugins
-   git clone https://github.com/YishenTu/claudian.git
-   cd claudian
+   git clone https://github.com/5mghost/5mghost-claudian.git
+   cd 5mghost-claudian
    ```
 
 2. Install dependencies and build:
@@ -74,7 +74,7 @@ An Obsidian plugin that embeds Claude Code as an AI collaborator in your vault. 
    ```
 
 3. Enable the plugin in Obsidian:
-   - Settings → Community plugins → Enable "Claudian"
+   - Settings → Community plugins → Enable "5mghost Claudian"
 
 ### Development
 
@@ -187,19 +187,19 @@ If you encounter `spawn claude ENOENT` or `Claude CLI not found`, the plugin can
 
 | Platform | Command | Example Path |
 |----------|---------|--------------|
-| macOS/Linux | `which claude` | `/Users/you/.volta/bin/claude` |
-| Windows (native) | `where.exe claude` | `C:\Users\you\AppData\Local\Claude\claude.exe` |
+| macOS/Linux | `which claude-internal` | `/Users/you/.volta/bin/claude-internal` |
+| Windows (native) | `where.exe claude-internal` | `C:\Users\you\AppData\Local\Claude\claude-internal.exe` |
 | Windows (npm) | `npm root -g` | `{root}\@anthropic-ai\claude-code\cli.js` |
 
-> **Note**: On Windows, avoid `.cmd` wrappers. Use `claude.exe` or `cli.js`.
+> **Note**: On Windows, avoid `.cmd` wrappers. Use `claude-internal.exe`, `claude.exe`, or `cli.js`.
 
 **Alternative**: Add your Node.js bin directory to PATH in Settings → Environment → Custom variables.
 
 ### npm CLI and Node.js not in same directory
 
-If using npm-installed CLI, check if `claude` and `node` are in the same directory:
+If using npm-installed CLI, check if `claude-internal` (or `claude`) and `node` are in the same directory:
 ```bash
-dirname $(which claude)
+dirname $(which claude-internal)
 dirname $(which node)
 ```
 
@@ -209,7 +209,7 @@ If different, GUI apps like Obsidian may not find Node.js.
 1. Install native binary (recommended)
 2. Add Node.js path to Settings → Environment: `PATH=/path/to/node/bin`
 
-**Still having issues?** [Open a GitHub issue](https://github.com/YishenTu/claudian/issues) with your platform, CLI path, and error message.
+**Still having issues?** [Open a GitHub issue](https://github.com/5mghost/5mghost-claudian/issues) with your platform, CLI path, and error message.
 
 ## Architecture
 
@@ -265,11 +265,11 @@ Licensed under the [MIT License](LICENSE).
 
 ## Star History
 
-<a href="https://www.star-history.com/?repos=YishenTu%2Fclaudian&type=date&legend=top-left">
+<a href="https://www.star-history.com/?repos=5mghost%2F5mghost-claudian&type=date&legend=top-left">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=YishenTu/claudian&type=date&legend=top-left&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=YishenTu/claudian&type=date&legend=top-left" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=YishenTu/claudian&type=date&legend=top-left" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=5mghost/5mghost-claudian&type=date&legend=top-left&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=5mghost/5mghost-claudian&type=date&legend=top-left" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=5mghost/5mghost-claudian&type=date&legend=top-left" />
   </picture>
 </a>
 

@@ -3,7 +3,7 @@
  *
  * Manages:
  * - CC settings in .claude/settings.json (CC-compatible, shareable)
- * - Claudian settings in .claude/claudian-settings.json (Claudian-specific)
+ * - Claudian settings in .claude/5mghost-claudian-settings.json (Claudian-specific)
  * - Slash commands in .claude/commands/*.md
  * - Chat sessions in .claude/sessions/*.jsonl
  * - MCP configs in .claude/mcp.json
@@ -11,7 +11,7 @@
  * Handles migration from legacy formats:
  * - Old settings.json with Claudian fields → split into CC + Claudian files
  * - Old permissions array → CC permissions object
- * - data.json state → claudian-settings.json
+ * - data.json state → 5mghost-claudian-settings.json
  */
 
 import type { App, Plugin } from 'obsidian';
@@ -161,7 +161,7 @@ export class StorageService {
       const hasState = this.hasStateToMigrate(dataJson);
       const hasLegacyContent = this.hasLegacyContentToMigrate(dataJson);
 
-      // Migrate data.json state to claudian-settings.json
+      // Migrate data.json state to 5mghost-claudian-settings.json
       if (hasState) {
         await this.migrateFromDataJson(dataJson);
       }
@@ -199,7 +199,7 @@ export class StorageService {
    * Migrate from old settings.json (with Claudian fields) to split format.
    *
    * Handles:
-   * - Legacy Claudian fields (userName, model, etc.) → claudian-settings.json
+   * - Legacy Claudian fields (userName, model, etc.) → 5mghost-claudian-settings.json
    * - Legacy permissions array → CC permissions object
    * - CC env object → Claudian environmentVariables string
    * - Preserves existing CC permissions if already in CC format
@@ -257,7 +257,7 @@ export class StorageService {
     // Verify Claudian settings were saved
     const savedClaudian = await this.claudianSettings.load();
     if (!savedClaudian || savedClaudian.userName === undefined) {
-      throw new Error('Failed to verify claudian-settings.json was saved correctly');
+      throw new Error('Failed to verify 5mghost-claudian-settings.json was saved correctly');
     }
 
     // Handle permissions: convert legacy format OR preserve existing CC format
@@ -291,7 +291,7 @@ export class StorageService {
   private async migrateFromDataJson(dataJson: LegacyDataJson): Promise<void> {
     const claudian = await this.claudianSettings.load();
 
-    // Only migrate if not already set (claudian-settings.json takes precedence)
+    // Only migrate if not already set (5mghost-claudian-settings.json takes precedence)
     if (dataJson.lastEnvHash !== undefined && !claudian.lastEnvHash) {
       claudian.lastEnvHash = dataJson.lastEnvHash;
     }
@@ -425,7 +425,7 @@ export class StorageService {
   }
 
   /**
-   * Get legacy activeConversationId from storage (claudian-settings.json or data.json).
+   * Get legacy activeConversationId from storage (5mghost-claudian-settings.json or data.json).
    */
   async getLegacyActiveConversationId(): Promise<string | null> {
     const fromSettings = await this.claudianSettings.getLegacyActiveConversationId();

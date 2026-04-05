@@ -230,7 +230,7 @@ export interface KeyboardNavigationSettings {
 export type TabBarPosition = 'input' | 'header';
 
 /**
- * Claudian-specific settings stored in .claude/claudian-settings.json.
+ * Claudian-specific settings stored in .claude/5mghost-claudian-settings.json.
  * These settings are NOT shared with Claude Code CLI.
  */
 export interface ClaudianSettings {

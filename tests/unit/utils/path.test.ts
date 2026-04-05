@@ -385,7 +385,7 @@ describe('getPathAccessType', () => {
     expect(getPathAccessType(path.join(os.homedir(), '.claude', 'skills', 'skill'), [], [], vaultPath)).toBe('vault');
     expect(getPathAccessType(path.join(os.homedir(), '.claude', 'plans', 'plan.md'), [], [], vaultPath)).toBe('vault');
     expect(getPathAccessType(path.join(os.homedir(), '.claude', 'mcp.json'), [], [], vaultPath)).toBe('vault');
-    expect(getPathAccessType(path.join(os.homedir(), '.claude', 'claudian-settings.json'), [], [], vaultPath)).toBe('vault');
+    expect(getPathAccessType(path.join(os.homedir(), '.claude', '5mghost-claudian-settings.json'), [], [], vaultPath)).toBe('vault');
   });
 
   it('returns context (read-only) for unknown ~/.claude paths', () => {
@@ -465,6 +465,27 @@ describe('findClaudeCLIPath', () => {
 
     const result = findClaudeCLIPath(isWindows ? 'C:\\custom\\bin' : '/custom/bin');
     expect(result).toBe(claudePath);
+  });
+
+  it('prefers claude-internal over claude in custom path entries', () => {
+    const internalPath = isWindows
+      ? 'C:\\custom\\bin\\claude-internal.exe'
+      : '/custom/bin/claude-internal';
+    const claudePath = isWindows
+      ? 'C:\\custom\\bin\\claude.exe'
+      : '/custom/bin/claude';
+
+    jest.spyOn(fs, 'existsSync').mockImplementation(
+      p => String(p) === internalPath || String(p) === claudePath
+    );
+    jest.spyOn(fs, 'statSync').mockImplementation(
+      p => ({
+        isFile: () => String(p) === internalPath || String(p) === claudePath,
+      }) as fs.Stats
+    );
+
+    const result = findClaudeCLIPath(isWindows ? 'C:\\custom\\bin' : '/custom/bin');
+    expect(result).toBe(internalPath);
   });
 
   it('returns string or null', () => {

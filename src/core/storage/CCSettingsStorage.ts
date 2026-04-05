@@ -9,7 +9,7 @@
  * - model (optional override)
  * - env (optional environment variables)
  *
- * Claudian-specific settings go in claudian-settings.json.
+ * Claudian-specific settings go in 5mghost-claudian-settings.json.
  */
 
 import type {

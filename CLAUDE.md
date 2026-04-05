@@ -44,7 +44,7 @@ Tests mirror `src/` structure in `tests/unit/` and `tests/integration/`.
 | File | Contents |
 |------|----------|
 | `.claude/settings.json` | CC-compatible: permissions, env, enabledPlugins |
-| `.claude/claudian-settings.json` | Claudian-specific settings (model, UI, etc.) |
+| `.claude/5mghost-claudian-settings.json` | Claudian-specific settings (model, UI, etc.) |
 | `.claude/settings.local.json` | Local overrides (gitignored) |
 | `.claude/mcp.json` | MCP server configs |
 | `.claude/commands/*.md` | Slash commands (YAML frontmatter) |

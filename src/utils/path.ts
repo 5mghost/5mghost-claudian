@@ -159,6 +159,25 @@ function findFirstExistingPath(entries: string[], candidates: string[]): string 
   return null;
 }
 
+function getClaudeBinaryCandidates(isWindows: boolean): string[] {
+  return isWindows
+    ? ['claude-internal.exe', 'claude-internal', 'claude.exe', 'claude']
+    : ['claude-internal', 'claude'];
+}
+
+function buildClaudePathsFromDirectories(directories: string[], isWindows: boolean): string[] {
+  const binaries = getClaudeBinaryCandidates(isWindows);
+  const paths: string[] = [];
+
+  for (const directory of directories) {
+    for (const binary of binaries) {
+      paths.push(path.join(directory, binary));
+    }
+  }
+
+  return paths;
+}
+
 function isExistingFile(filePath: string): boolean {
   try {
     if (fs.existsSync(filePath)) {
@@ -209,14 +228,9 @@ function resolveClaudeFromPathEntries(
     return null;
   }
 
-  if (!isWindows) {
-    const unixCandidate = findFirstExistingPath(entries, ['claude']);
-    return unixCandidate;
-  }
-
-  const exeCandidate = findFirstExistingPath(entries, ['claude.exe', 'claude']);
-  if (exeCandidate) {
-    return exeCandidate;
+  const binaryCandidate = findFirstExistingPath(entries, getClaudeBinaryCandidates(isWindows));
+  if (binaryCandidate) {
+    return binaryCandidate;
   }
 
   const cliJsCandidate = resolveCliJsFromPathEntries(entries, isWindows);
@@ -377,13 +391,14 @@ export function findClaudeCLIPath(pathValue?: string): string | null {
   // On Windows, prefer native .exe, then cli.js. Avoid .cmd fallback
   // because it requires shell: true and breaks SDK stdio streaming.
   if (isWindows) {
-    const exePaths: string[] = [
-      path.join(homeDir, '.claude', 'local', 'claude.exe'),
-      path.join(homeDir, 'AppData', 'Local', 'Claude', 'claude.exe'),
-      path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Claude', 'claude.exe'),
-      path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Claude', 'claude.exe'),
-      path.join(homeDir, '.local', 'bin', 'claude.exe'),
+    const windowsInstallDirectories: string[] = [
+      path.join(homeDir, '.claude', 'local'),
+      path.join(homeDir, 'AppData', 'Local', 'Claude'),
+      path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Claude'),
+      path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Claude'),
+      path.join(homeDir, '.local', 'bin'),
     ];
+    const exePaths = buildClaudePathsFromDirectories(windowsInstallDirectories, true);
 
     for (const p of exePaths) {
       if (isExistingFile(p)) {
@@ -400,27 +415,28 @@ export function findClaudeCLIPath(pathValue?: string): string | null {
 
   }
 
-  const commonPaths: string[] = [
-    path.join(homeDir, '.claude', 'local', 'claude'),
-    path.join(homeDir, '.local', 'bin', 'claude'),
-    path.join(homeDir, '.volta', 'bin', 'claude'),
-    path.join(homeDir, '.asdf', 'shims', 'claude'),
-    path.join(homeDir, '.asdf', 'bin', 'claude'),
-    '/usr/local/bin/claude',
-    '/opt/homebrew/bin/claude',
-    path.join(homeDir, 'bin', 'claude'),
-    path.join(homeDir, '.npm-global', 'bin', 'claude'),
+  const commonDirectories: string[] = [
+    path.join(homeDir, '.claude', 'local'),
+    path.join(homeDir, '.local', 'bin'),
+    path.join(homeDir, '.volta', 'bin'),
+    path.join(homeDir, '.asdf', 'shims'),
+    path.join(homeDir, '.asdf', 'bin'),
+    '/usr/local/bin',
+    '/opt/homebrew/bin',
+    path.join(homeDir, 'bin'),
+    path.join(homeDir, '.npm-global', 'bin'),
   ];
+  const commonPaths = buildClaudePathsFromDirectories(commonDirectories, isWindows);
 
   const npmPrefix = getNpmGlobalPrefix();
   if (npmPrefix) {
-    commonPaths.push(path.join(npmPrefix, 'bin', 'claude'));
+    commonPaths.push(...buildClaudePathsFromDirectories([path.join(npmPrefix, 'bin')], isWindows));
   }
 
   // NVM: resolve default version bin when NVM_BIN env var is not available (GUI apps)
   const nvmBin = resolveNvmDefaultBin(homeDir);
   if (nvmBin) {
-    commonPaths.push(path.join(nvmBin, 'claude'));
+    commonPaths.push(...buildClaudePathsFromDirectories([nvmBin], isWindows));
   }
 
   for (const p of commonPaths) {
@@ -698,7 +714,7 @@ export function getPathAccessType(
   const claudeDir = normalizePathForComparison(resolveRealPath(path.join(os.homedir(), '.claude')));
   if (resolvedCandidate === claudeDir || resolvedCandidate.startsWith(claudeDir + '/')) {
     const safeSubdirs = ['sessions', 'projects', 'commands', 'agents', 'skills', 'plans'];
-    const safeFiles = ['mcp.json', 'settings.json', 'settings.local.json', 'claudian-settings.json'];
+    const safeFiles = ['mcp.json', 'settings.json', 'settings.local.json', '5mghost-claudian-settings.json'];
     const relativeToClaude = resolvedCandidate.slice(claudeDir.length + 1);
 
     if (!relativeToClaude) {
