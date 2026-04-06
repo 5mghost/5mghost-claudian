@@ -816,14 +816,16 @@ describe('ClaudianPlugin', () => {
       // Should check existence of source session, not the conversation's own session
       expect(existsSpy).toHaveBeenCalledWith(
         expect.any(String),
-        'source-session-abc'
+        'source-session-abc',
+        expect.objectContaining({ env: expect.any(Object) })
       );
 
       // Should load from forkSource.sessionId with forkSource.resumeAt as truncation point
       expect(loadSpy).toHaveBeenCalledWith(
         expect.any(String),
         'source-session-abc',
-        'asst-uuid-cutoff'
+        'asst-uuid-cutoff',
+        expect.objectContaining({ env: expect.any(Object) })
       );
 
       // Messages should be loaded
@@ -855,7 +857,8 @@ describe('ClaudianPlugin', () => {
       // Should load from own session, not forkSource session
       expect(existsSpy).toHaveBeenCalledWith(
         expect.any(String),
-        'own-session-id'
+        'own-session-id',
+        expect.objectContaining({ env: expect.any(Object) })
       );
 
       existsSpy.mockRestore();
@@ -921,7 +924,8 @@ describe('ClaudianPlugin', () => {
       expect(loadSpy).toHaveBeenCalledWith(
         expect.any(String),
         'session-subagent-recovery',
-        undefined
+        undefined,
+        expect.objectContaining({ env: expect.any(Object) })
       );
       expect(loaded?.messages[0].toolCalls?.find(tc => tc.id === 'task-1')).toEqual(
         expect.objectContaining({
@@ -994,7 +998,8 @@ describe('ClaudianPlugin', () => {
       expect(loadSpy).toHaveBeenCalledWith(
         expect.any(String),
         'session-subagent-merge',
-        undefined
+        undefined,
+        expect.objectContaining({ env: expect.any(Object) })
       );
       expect(taskTool?.result).toBe('Full SDK result from queue-operation');
       expect(taskTool?.subagent?.result).toBe('Full SDK result from queue-operation');
@@ -1401,7 +1406,8 @@ describe('ClaudianPlugin', () => {
       expect(loadSubagentToolsSpy).toHaveBeenCalledWith(
         expect.any(String),
         'session-async-subagent-tools',
-        'agent-a123'
+        'agent-a123',
+        expect.objectContaining({ env: expect.any(Object) })
       );
       expect(taskTool?.subagent?.toolCalls).toEqual(
         expect.arrayContaining([

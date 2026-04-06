@@ -49,6 +49,7 @@ import {
   loadSubagentToolCalls,
   sdkSessionExists,
   type SDKSessionLoadResult,
+  type SDKSessionPathOptions,
 } from './utils/sdkSession';
 
 // ============================================
@@ -444,6 +445,10 @@ export default class ClaudianPlugin extends Plugin {
       conversation.subagentData = meta.subagentData ?? conversation.subagentData;
       conversation.resumeSessionAt = meta.resumeSessionAt ?? conversation.resumeSessionAt;
       conversation.forkSource = meta.forkSource ?? conversation.forkSource;
+      const backupMessages = meta.messageBackup ?? [];
+      if ((conversation.messages?.length ?? 0) === 0 && backupMessages.length > 0) {
+        conversation.messages = [...backupMessages];
+      }
     }
 
     // Also load native session metadata (no legacy JSONL)
@@ -465,7 +470,7 @@ export default class ClaudianPlugin extends Plugin {
           sessionId: resumeSessionId,
           sdkSessionId,
           previousSdkSessionIds: meta.previousSdkSessionIds,
-          messages: [], // Messages are in SDK storage, loaded on demand
+          messages: meta.messageBackup ? [...meta.messageBackup] : [], // Prefer local backup, then SDK on demand
           currentNote: meta.currentNote,
           externalContextPaths: meta.externalContextPaths,
           enabledMcpServers: meta.enabledMcpServers,
@@ -652,6 +657,12 @@ export default class ClaudianPlugin extends Plugin {
     return this.runtimeEnvironmentVariables;
   }
 
+  private getSDKSessionPathOptions(): SDKSessionPathOptions {
+    return {
+      env: parseEnvironmentVariables(this.getActiveEnvironmentVariables() || ''),
+    };
+  }
+
   getResolvedClaudeCliPath(): string | null {
     return this.cliResolver.resolve(
       this.settings.claudeCliPathsByHost,  // Per-device paths (preferred)
@@ -772,6 +783,7 @@ export default class ClaudianPlugin extends Plugin {
 
     const vaultPath = getVaultPath(this.app);
     if (!vaultPath) return;
+    const sdkPathOptions = this.getSDKSessionPathOptions();
 
     const isPendingFork = this.isPendingFork(conversation);
 
@@ -794,7 +806,7 @@ export default class ClaudianPlugin extends Plugin {
       : (conversation.sdkSessionId ?? conversation.sessionId);
 
     for (const sessionId of allSessionIds) {
-      if (!sdkSessionExists(vaultPath, sessionId)) {
+      if (!sdkSessionExists(vaultPath, sessionId, sdkPathOptions)) {
         missingSessionCount++;
         continue;
       }
@@ -804,7 +816,7 @@ export default class ClaudianPlugin extends Plugin {
         ? (isPendingFork ? conversation.forkSource!.resumeAt : conversation.resumeSessionAt)
         : undefined;
       const result: SDKSessionLoadResult = await loadSDKSessionMessages(
-        vaultPath, sessionId, truncateAt
+        vaultPath, sessionId, truncateAt, sdkPathOptions
       );
 
       if (result.error) {
@@ -816,10 +828,10 @@ export default class ClaudianPlugin extends Plugin {
       allSdkMessages.push(...result.messages);
     }
 
-    // Note: We intentionally don't notify users about missing session files.
-    // Session files may be missing due to path encoding differences (special characters
-    // in vault path) or external deletion. Showing a notification every restart is
-    // too intrusive and not actionable for users.
+    // If all SDK sessions are missing and we have no local backup messages, surface a clear notice.
+    if (missingSessionCount === allSessionIds.length && conversation.messages.length === 0) {
+      new Notice('Session history files are unavailable. This conversation can no longer load previous messages.');
+    }
 
     // Only mark as loaded if at least one session was successfully loaded,
     // or if all sessions were missing (no point retrying non-existent files).
@@ -849,7 +861,8 @@ export default class ClaudianPlugin extends Plugin {
       await this.enrichAsyncSubagentToolCalls(
         conversation.subagentData,
         vaultPath,
-        allSessionIds
+        allSessionIds,
+        sdkPathOptions
       );
       this.applySubagentData(merged, conversation.subagentData);
     }
@@ -861,7 +874,8 @@ export default class ClaudianPlugin extends Plugin {
   private async enrichAsyncSubagentToolCalls(
     subagentData: Record<string, SubagentInfo>,
     vaultPath: string,
-    sessionIds: string[]
+    sessionIds: string[],
+    sdkPathOptions: SDKSessionPathOptions
   ): Promise<void> {
     const uniqueSessionIds = [...new Set(sessionIds)];
     if (uniqueSessionIds.length === 0) return;
@@ -878,7 +892,7 @@ export default class ClaudianPlugin extends Plugin {
 
         let loader = loaderCache.get(cacheKey);
         if (!loader) {
-          loader = loadSubagentToolCalls(vaultPath, sessionId, subagent.agentId);
+          loader = loadSubagentToolCalls(vaultPath, sessionId, subagent.agentId, sdkPathOptions);
           loaderCache.set(cacheKey, loader);
         }
 
@@ -1055,7 +1069,7 @@ export default class ClaudianPlugin extends Plugin {
     const vaultPath = getVaultPath(this.app);
     const sdkSessionId = conversation.sdkSessionId ?? conversation.sessionId;
     if (vaultPath && sdkSessionId) {
-      await deleteSDKSession(vaultPath, sdkSessionId);
+      await deleteSDKSession(vaultPath, sdkSessionId, this.getSDKSessionPathOptions());
     }
 
     if (conversation.isNative) {

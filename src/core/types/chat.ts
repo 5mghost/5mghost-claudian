@@ -169,6 +169,11 @@ export interface SessionMetadata {
   resumeSessionAt?: string;
   /** Fork origin: source session to resume + fork from. Cleared after first SDK session init. */
   forkSource?: ForkSource;
+  /**
+   * Local backup of rendered conversation messages for native sessions.
+   * Used as a fallback when SDK session JSONL files are unavailable.
+   */
+  messageBackup?: ChatMessage[];
 }
 
 /** Normalized stream chunk from the Claude Agent SDK. */

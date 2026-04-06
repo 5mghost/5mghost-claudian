@@ -382,6 +382,7 @@ export class SessionStorage {
 
   toSessionMetadata(conversation: Conversation): SessionMetadata {
     const subagentData = this.extractSubagentData(conversation.messages);
+    const messageBackup = this.createMessageBackup(conversation.messages);
 
     return {
       id: conversation.id,
@@ -401,6 +402,7 @@ export class SessionStorage {
       subagentData: Object.keys(subagentData).length > 0 ? subagentData : undefined,
       resumeSessionAt: conversation.resumeSessionAt,
       forkSource: conversation.forkSource,
+      messageBackup,
     };
   }
 
@@ -423,6 +425,13 @@ export class SessionStorage {
     }
 
     return result;
+  }
+
+  private createMessageBackup(messages: ChatMessage[]): ChatMessage[] {
+    return messages.map((message) => ({
+      ...message,
+      images: message.images?.map((image) => ({ ...image, data: '' })),
+    }));
   }
 
 }

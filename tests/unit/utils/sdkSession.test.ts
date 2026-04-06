@@ -9,6 +9,7 @@ import {
   encodeVaultPathForSDK,
   filterActiveBranch,
   getSDKProjectsPath,
+  getSDKProjectsPathCandidates,
   getSDKSessionPath,
   isValidSessionId,
   loadSDKSessionMessages,
@@ -101,6 +102,34 @@ describe('sdkSession', () => {
       const projectsPath = getSDKProjectsPath();
       expect(projectsPath).toBe('/Users/test/.claude/projects');
     });
+
+    it('uses projectsPathHint as first candidate', () => {
+      const projectsPath = getSDKProjectsPath({ projectsPathHint: '/custom/projects' });
+      expect(projectsPath).toBe('/custom/projects');
+    });
+  });
+
+  describe('getSDKProjectsPathCandidates', () => {
+    it('includes runtime HOME and CLAUDE_CONFIG_DIR candidates', () => {
+      const candidates = getSDKProjectsPathCandidates({
+        env: {
+          HOME: '/Users/runtime',
+          CLAUDE_CONFIG_DIR: '/srv/claude/.claude',
+          CLAUDE_INTERNAL_CONFIG_DIR: '/srv/claude/.claude-internal',
+        },
+      });
+
+      expect(candidates).toEqual(
+        expect.arrayContaining([
+          '/Users/test/.claude/projects',
+          '/Users/test/.claude-internal/projects',
+          '/Users/runtime/.claude/projects',
+          '/Users/runtime/.claude-internal/projects',
+          '/srv/claude/.claude/projects',
+          '/srv/claude/.claude-internal/projects',
+        ])
+      );
+    });
   });
 
   describe('isValidSessionId', () => {
@@ -175,6 +204,27 @@ describe('sdkSession', () => {
 
       expect(exists).toBe(false);
     });
+
+    it('detects session file from runtime HOME candidate', () => {
+      mockExistsSync.mockImplementation((target: any) =>
+        String(target) === '/Users/runtime/.claude/projects/-Users-test-vault/session-alt.jsonl'
+      );
+
+      const exists = sdkSessionExists('/Users/test/vault', 'session-alt', {
+        env: { HOME: '/Users/runtime' },
+      });
+
+      expect(exists).toBe(true);
+    });
+
+    it('detects session file from default .claude-internal candidate', () => {
+      mockExistsSync.mockImplementation((target: any) =>
+        String(target) === '/Users/test/.claude-internal/projects/-Users-test-vault/session-internal.jsonl'
+      );
+
+      const exists = sdkSessionExists('/Users/test/vault', 'session-internal');
+      expect(exists).toBe(true);
+    });
   });
 
   describe('deleteSDKSession', () => {
@@ -209,6 +259,21 @@ describe('sdkSession', () => {
       await deleteSDKSession('/Users/test/vault', '../invalid');
 
       expect(mockFsPromises.unlink).not.toHaveBeenCalled();
+    });
+
+    it('deletes session from runtime HOME candidate when default path is missing', async () => {
+      mockExistsSync.mockImplementation((target: any) =>
+        String(target) === '/Users/runtime/.claude/projects/-Users-test-vault/session-alt.jsonl'
+      );
+      mockFsPromises.unlink.mockResolvedValue(undefined);
+
+      await deleteSDKSession('/Users/test/vault', 'session-alt', {
+        env: { HOME: '/Users/runtime' },
+      });
+
+      expect(mockFsPromises.unlink).toHaveBeenCalledWith(
+        '/Users/runtime/.claude/projects/-Users-test-vault/session-alt.jsonl'
+      );
     });
   });
 
@@ -275,6 +340,25 @@ describe('sdkSession', () => {
       expect(result.messages).toEqual([]);
       expect(result.error).toBe('Read error');
     });
+
+    it('reads session from runtime HOME candidate when default path is missing', async () => {
+      mockExistsSync.mockImplementation((target: any) =>
+        String(target) === '/Users/runtime/.claude/projects/-Users-test-vault/session-alt.jsonl'
+      );
+      mockFsPromises.readFile.mockResolvedValue(
+        '{"type":"assistant","uuid":"a1","message":{"content":"Hi runtime"}}'
+      );
+
+      const result = await readSDKSession('/Users/test/vault', 'session-alt', {
+        env: { HOME: '/Users/runtime' },
+      });
+
+      expect(result.messages).toHaveLength(1);
+      expect(mockFsPromises.readFile).toHaveBeenCalledWith(
+        '/Users/runtime/.claude/projects/-Users-test-vault/session-alt.jsonl',
+        'utf-8'
+      );
+    });
   });
 
   describe('loadSubagentToolCalls', () => {
@@ -331,6 +415,30 @@ describe('sdkSession', () => {
 
       expect(toolCalls).toEqual([]);
       expect(mockFsPromises.readFile).not.toHaveBeenCalled();
+    });
+
+    it('loads sidecar from runtime HOME candidate when default path is missing', async () => {
+      mockExistsSync.mockImplementation((target: any) =>
+        String(target) ===
+          '/Users/runtime/.claude/projects/-Users-test-vault/session-abc/subagents/agent-a123.jsonl'
+      );
+      mockFsPromises.readFile.mockResolvedValue([
+        '{"type":"assistant","timestamp":"2024-01-15T10:00:00Z","message":{"content":[{"type":"tool_use","id":"sub-tool-1","name":"Bash","input":{"command":"pwd"}}]}}',
+        '{"type":"user","timestamp":"2024-01-15T10:00:01Z","message":{"content":[{"type":"tool_result","tool_use_id":"sub-tool-1","content":"ok","is_error":false}]}}',
+      ].join('\n'));
+
+      const toolCalls = await loadSubagentToolCalls(
+        '/Users/test/vault',
+        'session-abc',
+        'a123',
+        { env: { HOME: '/Users/runtime' } }
+      );
+
+      expect(toolCalls).toHaveLength(1);
+      expect(mockFsPromises.readFile).toHaveBeenCalledWith(
+        '/Users/runtime/.claude/projects/-Users-test-vault/session-abc/subagents/agent-a123.jsonl',
+        'utf-8'
+      );
     });
   });
 

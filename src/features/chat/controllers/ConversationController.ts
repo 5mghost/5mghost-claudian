@@ -246,6 +246,7 @@ export class ConversationController {
       () => this.getGreeting()
     );
     this.deps.setWelcomeEl(welcomeEl);
+    this.renderMissingHistoryHintIfNeeded(conversation);
     this.updateWelcomeVisibility();
 
     this.callbacks.onConversationLoaded?.();
@@ -325,6 +326,7 @@ export class ConversationController {
         () => this.getGreeting()
       );
       this.deps.setWelcomeEl(welcomeEl);
+      this.renderMissingHistoryHintIfNeeded(conversation);
 
       this.deps.getHistoryDropdown()?.removeClass('visible');
       this.updateWelcomeVisibility();
@@ -810,6 +812,16 @@ export class ConversationController {
     }
 
     this.updateWelcomeVisibility();
+  }
+
+  private renderMissingHistoryHintIfNeeded(conversation: Conversation): void {
+    if (!conversation.isNative) return;
+    if (!conversation.sdkSessionId) return;
+    if (conversation.messages.length > 0) return;
+
+    const messagesEl = this.deps.getMessagesEl();
+    const hintEl = messagesEl.createDiv({ cls: 'claudian-history-missing-hint' });
+    hintEl.setText('This session history is unavailable. SDK message files were not found for this conversation.');
   }
 
   // ============================================

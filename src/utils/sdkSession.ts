@@ -96,8 +96,144 @@ export function encodeVaultPathForSDK(vaultPath: string): string {
   return absolutePath.replace(/[^a-zA-Z0-9]/g, '-');
 }
 
-export function getSDKProjectsPath(): string {
-  return path.join(os.homedir(), '.claude', 'projects');
+export interface SDKSessionPathOptions {
+  /** Runtime env vars used for CLI execution (plugin settings). */
+  env?: Record<string, string>;
+  /** Optional explicit projects root hint. */
+  projectsPathHint?: string;
+}
+
+const SDK_CONFIG_DIR_ENV_KEYS = [
+  'CLAUDE_CONFIG_DIR',
+  'CLAUDE_HOME',
+  'CLAUDE_INTERNAL_CONFIG_DIR',
+  'ANTHROPIC_CONFIG_DIR',
+] as const;
+const isWindows = process.platform === 'win32';
+
+function normalizePathKey(value: string): string {
+  return isWindows ? value.toLowerCase() : value;
+}
+
+function pushUniquePath(paths: string[], seen: Set<string>, raw: string | null | undefined): void {
+  if (!raw) return;
+  const trimmed = raw.trim();
+  if (!trimmed) return;
+
+  const resolved = path.resolve(trimmed);
+  const key = normalizePathKey(resolved);
+  if (seen.has(key)) return;
+
+  seen.add(key);
+  paths.push(resolved);
+}
+
+function configDirToProjectsPath(configDir: string): string {
+  const resolved = path.resolve(configDir);
+  const baseName = path.basename(resolved).toLowerCase();
+
+  if (baseName === 'projects') {
+    return resolved;
+  }
+  if (baseName === '.claude' || baseName === '.claude-internal') {
+    return path.join(resolved, 'projects');
+  }
+  return path.join(resolved, '.claude', 'projects');
+}
+
+function addHomeCandidates(
+  candidates: string[],
+  seen: Set<string>,
+  homePath: string | null | undefined
+): void {
+  if (!homePath) return;
+  pushUniquePath(candidates, seen, path.join(homePath, '.claude', 'projects'));
+  pushUniquePath(candidates, seen, path.join(homePath, '.claude-internal', 'projects'));
+}
+
+export function getSDKProjectsPathCandidates(options: SDKSessionPathOptions = {}): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  pushUniquePath(candidates, seen, options.projectsPathHint);
+
+  // Primary default roots used by Claude Code and Claude Internal.
+  addHomeCandidates(candidates, seen, os.homedir());
+
+  // Fallbacks from current process environment.
+  addHomeCandidates(candidates, seen, process.env.HOME);
+  addHomeCandidates(candidates, seen, process.env.USERPROFILE);
+  for (const key of SDK_CONFIG_DIR_ENV_KEYS) {
+    const raw = process.env[key];
+    if (raw) {
+      pushUniquePath(candidates, seen, configDirToProjectsPath(raw));
+    }
+  }
+
+  // Runtime env configured in plugin settings (most important for interop).
+  const runtimeEnv = options.env || {};
+  addHomeCandidates(candidates, seen, runtimeEnv.HOME);
+  addHomeCandidates(candidates, seen, runtimeEnv.USERPROFILE);
+  for (const key of SDK_CONFIG_DIR_ENV_KEYS) {
+    const raw = runtimeEnv[key];
+    if (raw) {
+      pushUniquePath(candidates, seen, configDirToProjectsPath(raw));
+    }
+  }
+
+  if (candidates.length === 0) {
+    return [path.join(os.homedir(), '.claude', 'projects')];
+  }
+  return candidates;
+}
+
+export function getSDKProjectsPath(options: SDKSessionPathOptions = {}): string {
+  return getSDKProjectsPathCandidates(options)[0];
+}
+
+function safeExists(filePath: string): boolean {
+  try {
+    return existsSync(filePath);
+  } catch {
+    return false;
+  }
+}
+
+function getSDKSessionPathCandidates(
+  vaultPath: string,
+  sessionId: string,
+  options: SDKSessionPathOptions = {}
+): string[] {
+  if (!isValidSessionId(sessionId)) {
+    throw new Error(`Invalid session ID: ${sessionId}`);
+  }
+
+  const encodedVault = encodeVaultPathForSDK(vaultPath);
+  return getSDKProjectsPathCandidates(options).map(projectsPath =>
+    path.join(projectsPath, encodedVault, `${sessionId}.jsonl`)
+  );
+}
+
+function getSubagentSidecarPathCandidates(
+  vaultPath: string,
+  sessionId: string,
+  agentId: string,
+  options: SDKSessionPathOptions = {}
+): string[] {
+  if (!isValidSessionId(sessionId) || !isValidAgentId(agentId)) {
+    return [];
+  }
+
+  const encodedVault = encodeVaultPathForSDK(vaultPath);
+  return getSDKProjectsPathCandidates(options).map(projectsPath =>
+    path.join(
+      projectsPath,
+      encodedVault,
+      sessionId,
+      'subagents',
+      `agent-${agentId}.jsonl`
+    )
+  );
 }
 
 /** Validates a subagent agent ID to prevent path traversal attacks. */
@@ -258,20 +394,12 @@ function buildToolCallsFromSubagentEvents(events: SubagentToolEvent[]): ToolCall
 function getSubagentSidecarPath(
   vaultPath: string,
   sessionId: string,
-  agentId: string
+  agentId: string,
+  options: SDKSessionPathOptions = {}
 ): string | null {
-  if (!isValidSessionId(sessionId) || !isValidAgentId(agentId)) {
-    return null;
-  }
-
-  const encodedVault = encodeVaultPathForSDK(vaultPath);
-  return path.join(
-    getSDKProjectsPath(),
-    encodedVault,
-    sessionId,
-    'subagents',
-    `agent-${agentId}.jsonl`
-  );
+  const candidates = getSubagentSidecarPathCandidates(vaultPath, sessionId, agentId, options);
+  if (candidates.length === 0) return null;
+  return candidates.find(safeExists) ?? candidates[0];
 }
 
 /**
@@ -283,13 +411,14 @@ function getSubagentSidecarPath(
 export async function loadSubagentToolCalls(
   vaultPath: string,
   sessionId: string,
-  agentId: string
+  agentId: string,
+  options: SDKSessionPathOptions = {}
 ): Promise<ToolCallInfo[]> {
-  const subagentFilePath = getSubagentSidecarPath(vaultPath, sessionId, agentId);
+  const subagentFilePath = getSubagentSidecarPath(vaultPath, sessionId, agentId, options);
   if (!subagentFilePath) return [];
 
   try {
-    if (!existsSync(subagentFilePath)) return [];
+    if (!safeExists(subagentFilePath)) return [];
 
     const content = await fs.readFile(subagentFilePath, 'utf-8');
     const lines = content.split('\n').filter(line => line.trim());
@@ -326,13 +455,14 @@ export async function loadSubagentToolCalls(
 export async function loadSubagentFinalResult(
   vaultPath: string,
   sessionId: string,
-  agentId: string
+  agentId: string,
+  options: SDKSessionPathOptions = {}
 ): Promise<string | null> {
-  const subagentFilePath = getSubagentSidecarPath(vaultPath, sessionId, agentId);
+  const subagentFilePath = getSubagentSidecarPath(vaultPath, sessionId, agentId, options);
   if (!subagentFilePath) return null;
 
   try {
-    if (!existsSync(subagentFilePath)) return null;
+    if (!safeExists(subagentFilePath)) return null;
     const content = await fs.readFile(subagentFilePath, 'utf-8');
     return extractFinalResultFromSubagentJsonl(content);
   } catch {
@@ -365,38 +495,52 @@ export function isValidSessionId(sessionId: string): boolean {
  * @returns Full path to the session JSONL file
  * @throws Error if sessionId is invalid (path traversal protection)
  */
-export function getSDKSessionPath(vaultPath: string, sessionId: string): string {
-  if (!isValidSessionId(sessionId)) {
-    throw new Error(`Invalid session ID: ${sessionId}`);
-  }
-  const projectsPath = getSDKProjectsPath();
-  const encodedVault = encodeVaultPathForSDK(vaultPath);
-  return path.join(projectsPath, encodedVault, `${sessionId}.jsonl`);
+export function getSDKSessionPath(
+  vaultPath: string,
+  sessionId: string,
+  options: SDKSessionPathOptions = {}
+): string {
+  const sessionPaths = getSDKSessionPathCandidates(vaultPath, sessionId, options);
+  return sessionPaths.find(safeExists) ?? sessionPaths[0];
 }
 
-export function sdkSessionExists(vaultPath: string, sessionId: string): boolean {
+export function sdkSessionExists(
+  vaultPath: string,
+  sessionId: string,
+  options: SDKSessionPathOptions = {}
+): boolean {
   try {
-    const sessionPath = getSDKSessionPath(vaultPath, sessionId);
-    return existsSync(sessionPath);
+    const sessionPaths = getSDKSessionPathCandidates(vaultPath, sessionId, options);
+    return sessionPaths.some(safeExists);
   } catch {
     return false;
   }
 }
 
-export async function deleteSDKSession(vaultPath: string, sessionId: string): Promise<void> {
+export async function deleteSDKSession(
+  vaultPath: string,
+  sessionId: string,
+  options: SDKSessionPathOptions = {}
+): Promise<void> {
   try {
-    const sessionPath = getSDKSessionPath(vaultPath, sessionId);
-    if (!existsSync(sessionPath)) return;
+    const sessionPaths = getSDKSessionPathCandidates(vaultPath, sessionId, options);
+    const sessionPath = sessionPaths.find(safeExists);
+    if (!sessionPath) return;
     await fs.unlink(sessionPath);
   } catch {
     // Best-effort deletion
   }
 }
 
-export async function readSDKSession(vaultPath: string, sessionId: string): Promise<SDKSessionReadResult> {
+export async function readSDKSession(
+  vaultPath: string,
+  sessionId: string,
+  options: SDKSessionPathOptions = {}
+): Promise<SDKSessionReadResult> {
   try {
-    const sessionPath = getSDKSessionPath(vaultPath, sessionId);
-    if (!existsSync(sessionPath)) {
+    const sessionPaths = getSDKSessionPathCandidates(vaultPath, sessionId, options);
+    const sessionPath = sessionPaths.find(safeExists);
+    if (!sessionPath) {
       return { messages: [], skippedLines: 0 };
     }
 
@@ -1172,9 +1316,10 @@ function buildAsyncSubagentInfo(
 export async function loadSDKSessionMessages(
   vaultPath: string,
   sessionId: string,
-  resumeSessionAt?: string
+  resumeSessionAt?: string,
+  options: SDKSessionPathOptions = {}
 ): Promise<SDKSessionLoadResult> {
-  const result = await readSDKSession(vaultPath, sessionId);
+  const result = await readSDKSession(vaultPath, sessionId, options);
 
   if (result.error) {
     return { messages: [], skippedLines: result.skippedLines, error: result.error };
@@ -1282,7 +1427,7 @@ export async function loadSDKSessionMessages(
           if (subagent.agentId && isValidAgentId(subagent.agentId)) {
             sidecarLoads.push({
               subagent,
-              promise: loadSubagentToolCalls(vaultPath, sessionId, subagent.agentId),
+              promise: loadSubagentToolCalls(vaultPath, sessionId, subagent.agentId, options),
             });
           }
         }
