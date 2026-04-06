@@ -926,6 +926,53 @@ describe('transformSDKMessage', () => {
   });
 
   describe('assistant message usage extraction', () => {
+    it('prefers assistant message model over intended model for usage', () => {
+      const message = msg({
+        type: 'assistant',
+        parent_tool_use_id: null,
+        message: {
+          model: 'claude-4.6-sonnet',
+          content: [{ type: 'text', text: 'Hello' }],
+          usage: {
+            input_tokens: 1000,
+            cache_creation_input_tokens: 300,
+            cache_read_input_tokens: 200,
+          },
+        },
+      });
+
+      const results = [...transformSDKMessage(message, { intendedModel: 'opus[1m]' })];
+      const usageResults = results.filter(r => r.type === 'usage');
+      expect(usageResults).toHaveLength(1);
+
+      const usage = (usageResults[0] as any).usage;
+      expect(usage.model).toBe('claude-4.6-sonnet');
+      expect(usage.contextWindow).toBe(200000);
+    });
+
+    it('falls back to intended model when assistant model is missing', () => {
+      const message = msg({
+        type: 'assistant',
+        parent_tool_use_id: null,
+        message: {
+          content: [{ type: 'text', text: 'Hello' }],
+          usage: {
+            input_tokens: 1000,
+            cache_creation_input_tokens: 300,
+            cache_read_input_tokens: 200,
+          },
+        },
+      });
+
+      const results = [...transformSDKMessage(message, { intendedModel: 'opus[1m]' })];
+      const usageResults = results.filter(r => r.type === 'usage');
+      expect(usageResults).toHaveLength(1);
+
+      const usage = (usageResults[0] as any).usage;
+      expect(usage.model).toBe('opus[1m]');
+      expect(usage.contextWindow).toBe(1000000);
+    });
+
     it('yields usage info from main agent assistant message', () => {
       const message = msg({
         type: 'assistant',

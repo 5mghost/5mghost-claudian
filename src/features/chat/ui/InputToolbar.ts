@@ -46,6 +46,7 @@ export class ModelSelector {
   private dropdownEl: HTMLElement | null = null;
   private callbacks: ToolbarCallbacks;
   private isReady = false;
+  private runtimeModel: string | null = null;
 
   constructor(parentEl: HTMLElement, callbacks: ToolbarCallbacks) {
     this.callbacks = callbacks;
@@ -80,18 +81,40 @@ export class ModelSelector {
     this.renderOptions();
   }
 
+  setRuntimeModel(model: string | null): void {
+    const trimmed = typeof model === 'string' ? model.trim() : '';
+    this.runtimeModel = trimmed.length > 0 ? trimmed : null;
+    this.updateDisplay();
+  }
+
+  private getModelDisplayLabel(model: string): string {
+    const normalized = model.trim().toLowerCase();
+    const is1M = normalized.includes('[1m]') || /\b1m\b/.test(normalized);
+    if (normalized === 'haiku' || normalized.includes('haiku')) {
+      return 'Haiku';
+    }
+    if (normalized === 'sonnet' || normalized.includes('sonnet')) {
+      return is1M ? 'Sonnet 1M' : 'Sonnet';
+    }
+    if (normalized === 'opus' || normalized.includes('opus')) {
+      return is1M ? 'Opus 1M' : 'Opus';
+    }
+    return model;
+  }
+
   updateDisplay() {
     if (!this.buttonEl) return;
     const currentModel = this.callbacks.getSettings().model;
+    const activeModel = this.runtimeModel ?? currentModel;
     const models = this.getAvailableModels();
-    const modelInfo = models.find(m => m.value === currentModel);
-
-    const displayModel = modelInfo || models[0];
+    const modelInfo = models.find(m => m.value === activeModel);
+    const displayLabel = modelInfo?.label
+      ?? (activeModel ? this.getModelDisplayLabel(activeModel) : (models[0]?.label || 'Unknown'));
 
     this.buttonEl.empty();
 
     const labelEl = this.buttonEl.createSpan({ cls: 'claudian-model-label' });
-    labelEl.setText(displayModel?.label || 'Unknown');
+    labelEl.setText(displayLabel);
   }
 
   setReady(ready: boolean) {
@@ -120,6 +143,7 @@ export class ModelSelector {
       option.addEventListener('click', async (e) => {
         e.stopPropagation();
         await this.callbacks.onModelChange(model.value);
+        this.runtimeModel = null;
         this.updateDisplay();
         this.renderOptions();
       });

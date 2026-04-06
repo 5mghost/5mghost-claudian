@@ -24,6 +24,13 @@ interface ContextWindowEntry {
   contextWindow: number;
 }
 
+function resolveRuntimeModel(messageModel: unknown, intendedModel?: string): string {
+  if (typeof messageModel === 'string' && messageModel.trim().length > 0) {
+    return messageModel.trim();
+  }
+  return intendedModel ?? 'sonnet';
+}
+
 function isResultError(message: { type: 'result'; subtype: string }): message is SDKResultError {
   return !!message.subtype && message.subtype !== 'success';
 }
@@ -154,7 +161,7 @@ export function* transformSDKMessage(
         const cacheReadInputTokens = usage.cache_read_input_tokens ?? 0;
         const contextTokens = inputTokens + cacheCreationInputTokens + cacheReadInputTokens;
 
-        const model = options?.intendedModel ?? 'sonnet';
+        const model = resolveRuntimeModel(message.message?.model, options?.intendedModel);
         const contextWindow = getContextWindowSize(model, options?.customContextLimits);
         const percentage = Math.min(100, Math.max(0, Math.round((contextTokens / contextWindow) * 100)));
 

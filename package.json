@@ -23,7 +23,7 @@
     "productivity",
     "ide"
   ],
-  "author": "5mghost",
+  "author": "mrkterswingman",
   "license": "MIT",
   "devDependencies": {
     "@types/jest": "^30.0.0",

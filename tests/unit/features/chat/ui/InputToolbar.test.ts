@@ -72,7 +72,7 @@ describe('ModelSelector', () => {
     expect(label?.textContent).toBe('Sonnet');
   });
 
-  it('should display first model when current model not found', () => {
+  it('should display raw model name when current model is unknown', () => {
     callbacks.getSettings.mockReturnValue({
       model: 'nonexistent',
       thinkingBudget: 'low',
@@ -82,7 +82,13 @@ describe('ModelSelector', () => {
     });
     selector.updateDisplay();
     const label = parentEl.querySelector('.claudian-model-label');
-    expect(label?.textContent).toBe('Haiku');
+    expect(label?.textContent).toBe('nonexistent');
+  });
+
+  it('should prefer runtime model for display label', () => {
+    selector.setRuntimeModel('claude-4.6-sonnet');
+    const label = parentEl.querySelector('.claudian-model-label');
+    expect(label?.textContent).toBe('Sonnet');
   });
 
   it('should render model options in reverse order', () => {

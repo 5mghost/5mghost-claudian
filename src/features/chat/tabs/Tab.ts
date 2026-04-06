@@ -567,7 +567,10 @@ export function initializeTabUI(
   // Update ChatState callbacks for UI updates
   state.callbacks = {
     ...state.callbacks,
-    onUsageChanged: (usage) => tab.ui.contextUsageMeter?.update(usage),
+    onUsageChanged: (usage) => {
+      tab.ui.contextUsageMeter?.update(usage);
+      tab.ui.modelSelector?.setRuntimeModel(usage?.model ?? null);
+    },
     onTodosChanged: (todos) => tab.ui.statusPanel?.updateTodos(todos),
     onAutoScrollChanged: () => tab.ui.navigationSidebar?.updateVisibility(),
   };
