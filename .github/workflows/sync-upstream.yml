@@ -56,7 +56,9 @@ jobs:
         run: git push origin "${{ steps.merge.outputs.branch }}"
 
       - name: Open sync PR
+        id: open_pr
         if: steps.merge.outputs.has_changes == 'true'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -65,6 +67,12 @@ jobs:
             --head "${{ steps.merge.outputs.branch }}" \
             --title "chore(sync): merge upstream/main ($(date -u +%Y-%m-%d))" \
             --body "Automated sync from \`YishenTu/claudian\` upstream into \`main\`."
+
+      - name: Report PR creation permission issue
+        if: steps.merge.outputs.has_changes == 'true' && steps.open_pr.outcome != 'success'
+        run: |
+          echo "::warning::Sync branch pushed, but PR creation was denied for GITHUB_TOKEN (Resource not accessible by integration)."
+          echo "::warning::Enable repository setting 'Allow GitHub Actions to create and approve pull requests' or use a PAT secret for gh pr create."
 
       - name: No upstream changes
         if: steps.merge.outputs.has_changes != 'true'
