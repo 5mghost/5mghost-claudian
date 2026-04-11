@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   sync-upstream:
@@ -30,17 +29,14 @@ jobs:
           git remote add upstream https://github.com/YishenTu/claudian.git
           git fetch upstream main --prune
 
-      - name: Merge upstream into bot branch
+      - name: Merge upstream into main
         id: merge
         run: |
           set -euo pipefail
-          BRANCH="bot/sync-upstream-${GITHUB_RUN_ID}"
-          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
-
-          git checkout -b "${BRANCH}" origin/main
+          git checkout main
 
           if ! git merge --no-ff --no-edit upstream/main; then
-            echo "Upstream merge conflict. Resolve manually in a branch from main."
+            echo "Upstream merge conflict. Resolve manually and rerun."
             exit 1
           fi
 
@@ -51,29 +47,10 @@ jobs:
 
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
-      - name: Push bot branch
+      - name: Push updated main
         if: steps.merge.outputs.has_changes == 'true'
-        run: git push origin "${{ steps.merge.outputs.branch }}"
-
-      - name: Open sync PR
-        id: open_pr
-        if: steps.merge.outputs.has_changes == 'true'
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.SYNC_PR_TOKEN || github.token }}
-        run: |
-          gh pr create \
-            --base main \
-            --head "${{ steps.merge.outputs.branch }}" \
-            --title "chore(sync): merge upstream/main ($(date -u +%Y-%m-%d))" \
-            --body "Automated sync from \`YishenTu/claudian\` upstream into \`main\`."
-
-      - name: Report PR creation permission issue
-        if: steps.merge.outputs.has_changes == 'true' && steps.open_pr.outcome != 'success'
-        run: |
-          echo "::warning::Sync branch pushed, but PR creation was denied for GITHUB_TOKEN (Resource not accessible by integration)."
-          echo "::warning::Enable repository setting 'Allow GitHub Actions to create and approve pull requests' or use a PAT secret for gh pr create."
+        run: git push origin main
 
       - name: No upstream changes
         if: steps.merge.outputs.has_changes != 'true'
-        run: echo "No upstream changes; no PR created."
+        run: echo "No upstream changes; main is already in sync."
