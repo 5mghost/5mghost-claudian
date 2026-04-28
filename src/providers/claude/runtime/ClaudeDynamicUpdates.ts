@@ -6,7 +6,6 @@ import type {
 
 import type { McpServerManager } from '../../../core/mcp/McpServerManager';
 import type {
-  ChatRuntimeEnsureReadyOptions,
   ChatRuntimeQueryOptions,
 } from '../../../core/runtime/types';
 import type { ClaudianSettings, PermissionMode } from '../../../core/types/settings';
@@ -15,6 +14,7 @@ import {
   resolveThinkingTokens,
 } from '../types/models';
 import type {
+  ClaudeEnsureReadyOptions,
   ClosePersistentQueryOptions,
   PersistentQueryConfig,
 } from './types';
@@ -35,7 +35,7 @@ export interface ClaudeDynamicUpdateDeps {
     externalContextPaths?: string[],
   ) => PersistentQueryConfig;
   needsRestart: (newConfig: PersistentQueryConfig) => boolean;
-  ensureReady: (options: ChatRuntimeEnsureReadyOptions) => Promise<boolean>;
+  ensureReady: (options: ClaudeEnsureReadyOptions) => Promise<boolean>;
   setCurrentExternalContextPaths: (paths: string[]) => void;
   notifyFailure: (message: string) => void;
 }
@@ -119,7 +119,11 @@ export async function applyClaudeDynamicUpdates(
   if (configBeforePermissionUpdate) {
     const sdkMode = deps.resolveSDKPermissionMode(permissionMode);
     const currentSdkMode = configBeforePermissionUpdate.sdkPermissionMode ?? null;
-    if (sdkMode !== currentSdkMode) {
+    const requiresAutoModeRestart = sdkMode === 'auto' && !configBeforePermissionUpdate.enableAutoMode;
+    if (requiresAutoModeRestart) {
+      // The Claude Code auto-mode opt-in is a startup flag. The restart path below
+      // will rebuild the query with that capability before auto becomes active.
+    } else if (sdkMode !== currentSdkMode) {
       try {
         await persistentQuery.setPermissionMode(sdkMode);
         deps.mutateCurrentConfig(config => {

@@ -1,4 +1,4 @@
-import { DEFAULT_CODEX_PRIMARY_MODEL } from '@/providers/codex/types/models';
+import { CODEX_SPARK_MODEL, DEFAULT_CODEX_PRIMARY_MODEL } from '@/providers/codex/types/models';
 import { codexChatUIConfig } from '@/providers/codex/ui/CodexChatUIConfig';
 
 describe('CodexChatUIConfig', () => {
@@ -80,14 +80,14 @@ describe('CodexChatUIConfig', () => {
 
   describe('isAdaptiveReasoningModel', () => {
     it('should return true for all models', () => {
-      expect(codexChatUIConfig.isAdaptiveReasoningModel(DEFAULT_CODEX_PRIMARY_MODEL)).toBe(true);
-      expect(codexChatUIConfig.isAdaptiveReasoningModel('unknown-model')).toBe(true);
+      expect(codexChatUIConfig.isAdaptiveReasoningModel(DEFAULT_CODEX_PRIMARY_MODEL, {})).toBe(true);
+      expect(codexChatUIConfig.isAdaptiveReasoningModel('unknown-model', {})).toBe(true);
     });
   });
 
   describe('getReasoningOptions', () => {
     it('should return effort levels', () => {
-      const options = codexChatUIConfig.getReasoningOptions(DEFAULT_CODEX_PRIMARY_MODEL);
+      const options = codexChatUIConfig.getReasoningOptions(DEFAULT_CODEX_PRIMARY_MODEL, {});
       expect(options).toHaveLength(4);
       expect(options.map(o => o.value)).toEqual(['low', 'medium', 'high', 'xhigh']);
     });
@@ -95,13 +95,55 @@ describe('CodexChatUIConfig', () => {
 
   describe('getDefaultReasoningValue', () => {
     it('should return medium for all models', () => {
-      expect(codexChatUIConfig.getDefaultReasoningValue(DEFAULT_CODEX_PRIMARY_MODEL)).toBe('medium');
+      expect(codexChatUIConfig.getDefaultReasoningValue(DEFAULT_CODEX_PRIMARY_MODEL, {})).toBe('medium');
     });
   });
 
   describe('getContextWindowSize', () => {
     it('should return 200000 for all models', () => {
       expect(codexChatUIConfig.getContextWindowSize(DEFAULT_CODEX_PRIMARY_MODEL)).toBe(200_000);
+    });
+  });
+
+  describe('applyModelDefaults', () => {
+    it('sets reasoning summary off for GPT-5.3 Codex Spark', () => {
+      const settings: Record<string, unknown> = {
+        providerConfigs: {
+          codex: {
+            reasoningSummary: 'detailed',
+          },
+        },
+      };
+
+      codexChatUIConfig.applyModelDefaults(CODEX_SPARK_MODEL, settings);
+
+      expect(settings).toMatchObject({
+        providerConfigs: {
+          codex: {
+            reasoningSummary: 'none',
+          },
+        },
+      });
+    });
+
+    it('leaves reasoning summary unchanged for other Codex models', () => {
+      const settings: Record<string, unknown> = {
+        providerConfigs: {
+          codex: {
+            reasoningSummary: 'detailed',
+          },
+        },
+      };
+
+      codexChatUIConfig.applyModelDefaults(DEFAULT_CODEX_PRIMARY_MODEL, settings);
+
+      expect(settings).toMatchObject({
+        providerConfigs: {
+          codex: {
+            reasoningSummary: 'detailed',
+          },
+        },
+      });
     });
   });
 
