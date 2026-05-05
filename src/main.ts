@@ -4,7 +4,7 @@ patchSetMaxListenersForElectron();
 
 import './providers';
 
-import type { Editor } from 'obsidian';
+import type { Editor, WorkspaceLeaf } from 'obsidian';
 import { MarkdownView, Notice, Plugin } from 'obsidian';
 
 import { DEFAULT_CLAUDIAN_SETTINGS } from './app/settings/defaultSettings';
@@ -29,7 +29,7 @@ import type {
 import {
   VIEW_TYPE_CLAUDIAN,
 } from './core/types';
-import type { EnvironmentScope } from './core/types/settings';
+import type { ChatViewPlacement, EnvironmentScope } from './core/types/settings';
 import { ClaudianView } from './features/chat/ClaudianView';
 import { type InlineEditContext, InlineEditModal } from './features/inline-edit/ui/InlineEditModal';
 import { ClaudianSettingTab } from './features/settings/ClaudianSettings';
@@ -38,6 +38,12 @@ import type { Locale } from './i18n/types';
 import { OPENCODE_PLAN_MODE_ID, OPENCODE_SAFE_MODE_ID } from './providers/opencode/modes';
 import { buildCursorContext } from './utils/editor';
 import { getVaultPath } from './utils/path';
+
+function isClaudianView(value: unknown): value is ClaudianView {
+  return !!value
+    && typeof value === 'object'
+    && typeof (value as { getTabManager?: unknown }).getTabManager === 'function';
+}
 
 export default class ClaudianPlugin extends Plugin {
   settings!: ClaudianSettings;
@@ -129,10 +135,9 @@ export default class ClaudianPlugin extends Plugin {
       id: 'new-session',
       name: 'New session (in current tab)',
       checkCallback: (checking: boolean) => {
-        const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDIAN)[0];
-        if (!leaf) return false;
+        const view = this.getView();
+        if (!view) return false;
 
-        const view = leaf.view as ClaudianView;
         const tabManager = view.getTabManager();
         if (!tabManager) return false;
 
@@ -152,10 +157,9 @@ export default class ClaudianPlugin extends Plugin {
       id: 'close-current-tab',
       name: 'Close current tab',
       checkCallback: (checking: boolean) => {
-        const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDIAN)[0];
-        if (!leaf) return false;
+        const view = this.getView();
+        if (!view) return false;
 
-        const view = leaf.view as ClaudianView;
         const tabManager = view.getTabManager();
         if (!tabManager) return false;
 
@@ -188,9 +192,7 @@ export default class ClaudianPlugin extends Plugin {
     let leaf = workspace.getLeavesOfType(VIEW_TYPE_CLAUDIAN)[0];
 
     if (!leaf) {
-      const newLeaf = this.settings.openInMainTab
-        ? workspace.getLeaf('tab')
-        : workspace.getRightLeaf(false);
+      const newLeaf = this.getLeafForPlacement(this.settings.chatViewPlacement);
       if (newLeaf) {
         await newLeaf.setViewState({
           type: VIEW_TYPE_CLAUDIAN,
@@ -205,7 +207,20 @@ export default class ClaudianPlugin extends Plugin {
     }
   }
 
+  private getLeafForPlacement(placement: ChatViewPlacement): WorkspaceLeaf | null {
+    const { workspace } = this.app;
+    switch (placement) {
+      case 'main-tab':
+        return workspace.getLeaf('tab');
+      case 'left-sidebar':
+        return workspace.getLeftLeaf(false);
+      case 'right-sidebar':
+        return workspace.getRightLeaf(false);
+    }
+  }
+
   private canCreateNewTab(): boolean {
+    const hasClaudianLeaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDIAN).length > 0;
     const view = this.getView();
     const tabManager = view?.getTabManager();
 
@@ -213,7 +228,7 @@ export default class ClaudianPlugin extends Plugin {
       return tabManager.canCreateTab();
     }
 
-    if (view) {
+    if (hasClaudianLeaf) {
       return false;
     }
 
@@ -712,15 +727,12 @@ export default class ClaudianPlugin extends Plugin {
 
   getView(): ClaudianView | null {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDIAN);
-    if (leaves.length > 0) {
-      return leaves[0].view as ClaudianView;
-    }
-    return null;
+    return leaves.map(leaf => leaf.view).find(isClaudianView) ?? null;
   }
 
   getAllViews(): ClaudianView[] {
     const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CLAUDIAN);
-    return leaves.map(leaf => leaf.view as ClaudianView);
+    return leaves.map(leaf => leaf.view).filter(isClaudianView);
   }
 
   findConversationAcrossViews(conversationId: string): { view: ClaudianView; tabId: string } | null {
