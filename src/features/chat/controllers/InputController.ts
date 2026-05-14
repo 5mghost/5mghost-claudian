@@ -62,6 +62,10 @@ const DEFAULT_APPROVAL_DECISION_OPTIONS: ApprovalDecisionOption[] =
     decision,
   }));
 
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
 export interface InputControllerDeps {
   plugin: ClaudianPlugin;
   state: ChatState;
@@ -257,7 +261,7 @@ export class InputController {
     // Hide welcome message when sending first message
     const welcomeEl = this.deps.getWelcomeEl();
     if (welcomeEl) {
-      welcomeEl.style.display = 'none';
+      welcomeEl.addClass('claudian-hidden');
     }
 
     fileContextManager?.startSession();
@@ -566,11 +570,13 @@ export class InputController {
         }
       }
 
-      indicatorEl.style.display = 'flex';
+      indicatorEl.addClass('claudian-visible-flex');
+      indicatorEl.removeClass('claudian-hidden');
       return;
     }
 
-    indicatorEl.style.display = 'none';
+    indicatorEl.removeClass('claudian-visible-flex');
+    indicatorEl.addClass('claudian-hidden');
   }
 
   clearQueuedMessage(): void {
@@ -616,12 +622,14 @@ export class InputController {
       this.deps.getImageContextManager()?.setImages(images);
     }
 
-    setTimeout(
-      () => this.sendMessage({
-        editorContextOverride: editorContext,
-        browserContextOverride: browserContext ?? null,
-        canvasContextOverride: canvasContext,
-      }),
+    window.setTimeout(
+      () => {
+        void this.sendMessage({
+          editorContextOverride: editorContext,
+          browserContextOverride: browserContext ?? null,
+          canvasContextOverride: canvasContext,
+        });
+      },
       0
     );
   }
@@ -856,7 +864,7 @@ export class InputController {
   private activateStreamingAssistantMessage(message: ChatMessage): void {
     const { state, renderer } = this.deps;
     const msgEl = renderer.addMessage(message);
-    const contentEl = msgEl.querySelector('.claudian-message-content') as HTMLElement | null;
+    const contentEl = msgEl.querySelector<HTMLElement>('.claudian-message-content');
 
     if (!contentEl) {
       return;
@@ -1094,7 +1102,7 @@ export class InputController {
     if (!(plugin.settings.enableAutoScroll ?? true)) return;
     if (!state.autoScrollEnabled) return;
 
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       if (!(this.deps.plugin.settings.enableAutoScroll ?? true)) return;
       if (!this.deps.state.autoScrollEnabled) return;
 
@@ -1124,13 +1132,15 @@ export class InputController {
         plugin.app,
         rawInstruction,
         {
-          onAccept: async (finalInstruction) => {
-            const currentPrompt = plugin.settings.systemPrompt;
-            plugin.settings.systemPrompt = appendMarkdownSnippet(currentPrompt, finalInstruction);
-            await plugin.saveSettings();
+          onAccept: (finalInstruction) => {
+            void (async (): Promise<void> => {
+              const currentPrompt = plugin.settings.systemPrompt;
+              plugin.settings.systemPrompt = appendMarkdownSnippet(currentPrompt, finalInstruction);
+              await plugin.saveSettings();
 
-            new Notice('Instruction added to custom system prompt');
-            instructionModeManager?.clear();
+              new Notice('Instruction added to custom system prompt');
+              instructionModeManager?.clear();
+            })();
           },
           onReject: () => {
             wasCancelled = true;
@@ -1339,7 +1349,7 @@ export class InputController {
       } catch (err) {
         setPending(null);
         this.restoreInputContainer(inputContainerEl);
-        reject(err);
+        reject(toError(err));
       }
     });
   }
@@ -1386,7 +1396,7 @@ export class InputController {
       } catch (err) {
         this.pendingExitPlanModeInline = null;
         this.restoreInputContainer(inputContainerEl);
-        reject(err);
+        reject(toError(err));
       }
     });
   }
@@ -1440,7 +1450,7 @@ export class InputController {
         this.pendingPlanApproval = null;
         this.pendingPlanApprovalInvalidated = false;
         this.restoreInputContainer(inputContainerEl);
-        reject(err);
+        reject(toError(err));
       }
     });
   }
@@ -1459,21 +1469,21 @@ export class InputController {
 
   private hideInputContainer(inputContainerEl: HTMLElement): void {
     this.inputContainerHideDepth++;
-    inputContainerEl.style.display = 'none';
+    inputContainerEl.addClass('claudian-hidden');
   }
 
   private restoreInputContainer(inputContainerEl: HTMLElement): void {
     if (this.inputContainerHideDepth <= 0) return;
     this.inputContainerHideDepth--;
     if (this.inputContainerHideDepth === 0) {
-      inputContainerEl.style.display = '';
+      inputContainerEl.removeClass('claudian-hidden');
     }
   }
 
   private resetInputContainerVisibility(): void {
     if (this.inputContainerHideDepth > 0) {
       this.inputContainerHideDepth = 0;
-      this.deps.getInputContainerEl().style.display = '';
+      this.deps.getInputContainerEl().removeClass('claudian-hidden');
     }
   }
 
@@ -1523,9 +1533,14 @@ export class InputController {
         await this.deps.onForkAll();
         break;
       }
-      default:
+      default: {
         // Unknown command - notify user
-        new Notice(`Unknown command: ${command.action}`);
+        const unknownAction = typeof (command as { action?: unknown }).action === 'string'
+          ? (command as { action: string }).action
+          : 'unknown';
+        new Notice(`Unknown command: ${unknownAction}`);
+        break;
+      }
     }
   }
 

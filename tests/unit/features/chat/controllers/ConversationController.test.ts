@@ -855,8 +855,8 @@ describe('ConversationController', () => {
 
         const menu = (Menu as typeof Menu & { instances: Array<{ items: Array<{ title: string }> }> }).instances[0];
         expect(menu.items.map(item => item.title)).toEqual([
-          'Open in New Tab',
-          'Open in Background Tab',
+          'Open in new tab',
+          'Open in background tab',
           'Rename',
           'Delete',
         ]);
@@ -887,7 +887,7 @@ describe('ConversationController', () => {
 
         const menu = (Menu as typeof Menu & { instances: Array<{ items: Array<{ title: string }> }> }).instances[0];
         expect(menu.items.map(item => item.title)).toEqual([
-          'Switch to Open Session',
+          'Switch to open session',
           'Rename',
           'Delete',
         ]);
@@ -920,6 +920,7 @@ describe('ConversationController', () => {
       expect(clickHandlers).toBeDefined();
 
       await clickHandlers![0]({ stopPropagation: jest.fn() });
+      await Promise.resolve();
 
       expect(deps.plugin.switchConversation).toHaveBeenCalledWith('conv-2');
     });

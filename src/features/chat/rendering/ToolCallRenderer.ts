@@ -25,7 +25,7 @@ import {
 } from '../../../core/tools/toolNames';
 import { extractToolResultContent } from '../../../core/tools/toolResultContent';
 import type { AskUserQuestionItem, AskUserQuestionOption, ToolCallInfo } from '../../../core/types';
-import { MCP_ICON_SVG } from '../../../shared/icons';
+import { appendMcpIcon } from '../../../shared/icons';
 import { parseApplyPatchDiffs } from '../../../utils/diff';
 import { setupCollapsible } from './collapsible';
 import { renderDiffContent } from './DiffRenderer';
@@ -34,10 +34,26 @@ import { renderTodoItems } from './todoUtils';
 export function setToolIcon(el: HTMLElement, name: string): void {
   const icon = getToolIcon(name);
   if (icon === MCP_ICON_MARKER) {
-    el.innerHTML = MCP_ICON_SVG;
+    appendMcpIcon(el);
   } else {
     setIcon(el, icon);
   }
+}
+
+function stringifyToolValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (value === null || value === undefined) return '';
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return '';
+  }
+}
+
+function getInputText(input: Record<string, unknown>, key: string, fallback = ''): string {
+  return stringifyToolValue(input[key]) || fallback;
 }
 
 export function getToolName(name: string, input: Record<string, unknown>): string {
@@ -64,26 +80,26 @@ export function getToolSummary(name: string, input: Record<string, unknown>): st
     case TOOL_READ:
     case TOOL_WRITE:
     case TOOL_EDIT: {
-      const filePath = (input.file_path as string) || '';
+      const filePath = getInputText(input, 'file_path');
       return fileNameOnly(filePath);
     }
     case TOOL_BASH: {
-      const cmd = (input.command as string) || '';
+      const cmd = getInputText(input, 'command');
       return truncateText(cmd, 60);
     }
     case TOOL_GLOB:
     case TOOL_GREP:
-      return (input.pattern as string) || '';
+      return getInputText(input, 'pattern');
     case TOOL_WEB_SEARCH:
       return getWebSearchSummary(input, 60);
     case TOOL_WEB_FETCH:
-      return truncateText((input.url as string) || '', 60);
+      return truncateText(getInputText(input, 'url'), 60);
     case TOOL_LS:
-      return fileNameOnly((input.path as string) || '.');
+      return fileNameOnly(getInputText(input, 'path', '.'));
     case TOOL_SKILL:
-      return (input.skill as string) || '';
+      return getInputText(input, 'skill');
     case TOOL_TOOL_SEARCH:
-      return truncateText(parseToolSearchQuery(input.query as string | undefined), 60);
+      return truncateText(parseToolSearchQuery(getInputText(input, 'query')), 60);
     case TOOL_TODO_WRITE:
       return '';
     case TOOL_APPLY_PATCH:
@@ -102,28 +118,28 @@ export function getToolSummary(name: string, input: Record<string, unknown>): st
 export function getToolLabel(name: string, input: Record<string, unknown>): string {
   switch (name) {
     case TOOL_READ:
-      return `Read: ${shortenPath(input.file_path as string) || 'file'}`;
+      return `Read: ${shortenPath(getInputText(input, 'file_path')) || 'file'}`;
     case TOOL_WRITE:
-      return `Write: ${shortenPath(input.file_path as string) || 'file'}`;
+      return `Write: ${shortenPath(getInputText(input, 'file_path')) || 'file'}`;
     case TOOL_EDIT:
-      return `Edit: ${shortenPath(input.file_path as string) || 'file'}`;
+      return `Edit: ${shortenPath(getInputText(input, 'file_path')) || 'file'}`;
     case TOOL_BASH: {
-      const cmd = (input.command as string) || 'command';
+      const cmd = getInputText(input, 'command', 'command');
       return `Bash: ${cmd.length > 40 ? cmd.substring(0, 40) + '...' : cmd}`;
     }
     case TOOL_GLOB:
-      return `Glob: ${input.pattern || 'files'}`;
+      return `Glob: ${getInputText(input, 'pattern', 'files')}`;
     case TOOL_GREP:
-      return `Grep: ${input.pattern || 'pattern'}`;
+      return `Grep: ${getInputText(input, 'pattern', 'pattern')}`;
     case TOOL_WEB_SEARCH: {
       return getWebSearchLabel(input, 40);
     }
     case TOOL_WEB_FETCH: {
-      const url = (input.url as string) || 'url';
+      const url = getInputText(input, 'url', 'url');
       return `WebFetch: ${url.length > 40 ? url.substring(0, 40) + '...' : url}`;
     }
     case TOOL_LS:
-      return `LS: ${shortenPath(input.path as string) || '.'}`;
+      return `LS: ${shortenPath(getInputText(input, 'path')) || '.'}`;
     case TOOL_TODO_WRITE: {
       const todos = input.todos as Array<{ status: string }> | undefined;
       if (todos && Array.isArray(todos)) {
@@ -133,11 +149,11 @@ export function getToolLabel(name: string, input: Record<string, unknown>): stri
       return 'Tasks';
     }
     case TOOL_SKILL: {
-      const skillName = (input.skill as string) || 'skill';
+      const skillName = getInputText(input, 'skill', 'skill');
       return `Skill: ${skillName}`;
     }
     case TOOL_TOOL_SEARCH: {
-      const tools = parseToolSearchQuery(input.query as string | undefined);
+      const tools = parseToolSearchQuery(getInputText(input, 'query'));
       return `ToolSearch: ${tools || 'tools'}`;
     }
     case TOOL_ENTER_PLAN_MODE:
@@ -188,13 +204,13 @@ function getApplyPatchSummary(input: Record<string, unknown>): string {
 }
 
 function getWriteStdinSummary(input: Record<string, unknown>): string {
-  const sessionId = input.session_id ?? input.sessionId;
+  const sessionId = stringifyToolValue(input.session_id ?? input.sessionId);
   const chars = typeof input.chars === 'string' ? input.chars.replace(/\n/g, '\\n') : '';
   if (chars) {
     const preview = chars.length > 24 ? `${chars.slice(0, 24)}...` : chars;
-    return sessionId ? `#${String(sessionId)} ${preview}` : preview;
+    return sessionId ? `#${sessionId} ${preview}` : preview;
   }
-  return sessionId ? `#${String(sessionId)}` : '';
+  return sessionId ? `#${sessionId}` : '';
 }
 
 function getAgentLifecycleSummary(name: string, input: Record<string, unknown>): string {
@@ -498,9 +514,7 @@ function renderToolSearchExpanded(container: HTMLElement, result: string): void 
 function renderWebFetchExpanded(container: HTMLElement, result: string): void {
   const maxChars = 500;
   const linesEl = container.createDiv({ cls: 'claudian-tool-lines' });
-  const lineEl = linesEl.createDiv({ cls: 'claudian-tool-line' });
-  lineEl.style.whiteSpace = 'pre-wrap';
-  lineEl.style.wordBreak = 'break-word';
+  const lineEl = linesEl.createDiv({ cls: 'claudian-tool-line claudian-tool-line-wrap' });
 
   if (result.length > maxChars) {
     lineEl.setText(result.slice(0, maxChars));
@@ -559,10 +573,11 @@ function renderApplyPatchExpanded(
   const changes = Array.isArray(input.changes) ? input.changes : [];
   if (changes.length > 0) {
     const linesEl = container.createDiv({ cls: 'claudian-tool-lines' });
-    for (const change of changes) {
-      if (!change || typeof change !== 'object') continue;
-      const path = typeof change.path === 'string' ? change.path : '';
-      const kind = typeof change.kind === 'string' ? change.kind : 'change';
+    for (const change of changes as unknown[]) {
+      if (!change || typeof change !== 'object' || Array.isArray(change)) continue;
+      const changeRecord = change as Record<string, unknown>;
+      const path = typeof changeRecord.path === 'string' ? changeRecord.path : '';
+      const kind = typeof changeRecord.kind === 'string' ? changeRecord.kind : 'change';
       if (!path) continue;
       linesEl.createDiv({ cls: 'claudian-tool-line', text: `${kind}: ${path}` });
     }
@@ -603,13 +618,24 @@ function renderAgentLifecycleExpanded(container: HTMLElement, result: string): v
       const linesEl = container.createDiv({ cls: 'claudian-tool-lines' });
       for (const [key, value] of Object.entries(parsed)) {
         const lineEl = linesEl.createDiv({ cls: 'claudian-tool-line' });
-        const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+        const displayValue = formatToolDisplayValue(value);
         lineEl.setText(`${key}: ${displayValue}`);
       }
       return;
     } catch { /* fall through to plain text */ }
   }
   renderLinesExpanded(container, result, 20);
+}
+
+function formatToolDisplayValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return `${value}`;
+  }
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return JSON.stringify(value);
 }
 
 export function renderExpandedContent(
@@ -788,7 +814,7 @@ function formatAnswer(raw: unknown): string {
 }
 
 function resolveAskUserAnswers(toolCall: ToolCallInfo): Record<string, unknown> | undefined {
-  if (toolCall.resolvedAnswers) return toolCall.resolvedAnswers as Record<string, unknown>;
+  if (toolCall.resolvedAnswers) return toolCall.resolvedAnswers;
 
   const parsed = extractResolvedAnswersFromResultText(toolCall.result);
   if (parsed) {
@@ -932,10 +958,10 @@ function createTodoToggleHandler(
   return (expanded: boolean) => {
     if (onExpandChange) onExpandChange(expanded);
     if (currentTaskEl) {
-      currentTaskEl.style.display = expanded ? 'none' : '';
+      currentTaskEl.toggleClass('claudian-hidden', expanded);
     }
     if (statusEl) {
-      statusEl.style.display = expanded ? 'none' : '';
+      statusEl.toggleClass('claudian-hidden', expanded);
     }
   };
 }

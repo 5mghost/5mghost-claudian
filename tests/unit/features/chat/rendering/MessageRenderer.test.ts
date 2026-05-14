@@ -146,8 +146,9 @@ describe('MessageRenderer', () => {
     // Check the content contains interrupt styling
     const contentEl = msgEl.children[0];
     const textEl = contentEl.children[0];
-    expect(textEl.innerHTML).toContain('claudian-interrupted');
-    expect(textEl.innerHTML).toContain('Interrupted');
+    const interruptedEl = textEl.children[0];
+    expect(interruptedEl.hasClass('claudian-interrupted')).toBe(true);
+    expect(interruptedEl.textContent).toBe('Interrupted');
   });
 
   it('renders interrupted assistant message with content + interrupt indicator', () => {
@@ -173,8 +174,9 @@ describe('MessageRenderer', () => {
     // The content div should have both content rendering and an interrupt indicator
     const contentEl = msgEl.children[0];
     const lastChild = contentEl.children[contentEl.children.length - 1];
-    expect(lastChild.innerHTML).toContain('claudian-interrupted');
-    expect(lastChild.innerHTML).toContain('Interrupted');
+    const interruptedEl = lastChild.children[0];
+    expect(interruptedEl.hasClass('claudian-interrupted')).toBe(true);
+    expect(interruptedEl.textContent).toBe('Interrupted');
   });
 
   it('renders bare interrupt marker for empty interrupted assistant message', () => {
@@ -198,7 +200,7 @@ describe('MessageRenderer', () => {
     expect(msgEl.hasClass('claudian-message-assistant')).toBe(true);
     const contentEl = msgEl.children[0];
     const textEl = contentEl.children[0];
-    expect(textEl.innerHTML).toContain('claudian-interrupted');
+    expect(textEl.children[0].hasClass('claudian-interrupted')).toBe(true);
   });
 
   it('skips rebuilt context messages', () => {
@@ -1137,7 +1139,7 @@ describe('MessageRenderer', () => {
       await clickHandlers![0]({ stopPropagation: jest.fn() });
 
       expect(writeTextMock).toHaveBeenCalledWith('markdown content');
-      expect(copyBtn.textContent).toBe('copied!');
+      expect(copyBtn.textContent).toBe('Copied!');
       expect(copyBtn.classList.contains('copied')).toBe(true);
     });
 
@@ -1545,14 +1547,14 @@ describe('MessageRenderer', () => {
 
       // First click
       await clickHandlers![0]({ stopPropagation: jest.fn() });
-      expect(copyBtn.textContent).toBe('copied!');
+      expect(copyBtn.textContent).toBe('Copied!');
 
       // Second rapid click before timeout expires
       await clickHandlers![0]({ stopPropagation: jest.fn() });
 
       // clearTimeout should have been called for the first pending timeout
       expect(clearTimeoutSpy).toHaveBeenCalled();
-      expect(copyBtn.textContent).toBe('copied!');
+      expect(copyBtn.textContent).toBe('Copied!');
 
       clearTimeoutSpy.mockRestore();
     });
@@ -1569,7 +1571,7 @@ describe('MessageRenderer', () => {
 
       // Click to copy
       await clickHandlers![0]({ stopPropagation: jest.fn() });
-      expect(copyBtn.textContent).toBe('copied!');
+      expect(copyBtn.textContent).toBe('Copied!');
       expect(copyBtn.classList.contains('copied')).toBe(true);
 
       // Advance timers by 1500ms (the feedback duration)
