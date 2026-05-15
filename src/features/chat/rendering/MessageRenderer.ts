@@ -1,11 +1,13 @@
 import type { App, Component } from 'obsidian';
-import { MarkdownRenderer, Notice, setIcon } from 'obsidian';
+import { MarkdownRenderer, Menu, Notice, setIcon } from 'obsidian';
 
 import { DEFAULT_CHAT_PROVIDER_ID, type ProviderCapabilities } from '../../../core/providers/types';
+import type { ChatRewindMode } from '../../../core/runtime/types';
 import {
   isSubagentToolName,
   isWriteEditTool,
   TOOL_AGENT_OUTPUT,
+  TOOL_WRITE_STDIN,
 } from '../../../core/tools/toolNames';
 import { extractToolResultContent } from '../../../core/tools/toolResultContent';
 import type { ChatMessage, ImageAttachment, SubagentInfo, ToolCallInfo } from '../../../core/types';
@@ -46,7 +48,7 @@ export class MessageRenderer {
   private plugin: ClaudianPlugin;
   private component: Component;
   private messagesEl: HTMLElement;
-  private rewindCallback?: (messageId: string) => Promise<void>;
+  private rewindCallback?: (messageId: string, mode?: ChatRewindMode) => Promise<void>;
   private getCapabilities: () => ProviderCapabilities;
   private forkCallback?: (messageId: string) => Promise<void>;
   private liveMessageEls = new Map<string, HTMLElement>();
@@ -55,7 +57,7 @@ export class MessageRenderer {
     plugin: ClaudianPlugin,
     component: Component,
     messagesEl: HTMLElement,
-    rewindCallback?: (messageId: string) => Promise<void>,
+    rewindCallback?: (messageId: string, mode?: ChatRewindMode) => Promise<void>,
     forkCallback?: (messageId: string) => Promise<void>,
     getCapabilities?: () => ProviderCapabilities,
   ) {
@@ -244,6 +246,9 @@ export class MessageRenderer {
         return;
       }
     }
+    if (msg.role === 'assistant' && !this.hasVisibleContent(msg)) {
+      return;
+    }
 
     const msgEl = this.messagesEl.createDiv({
       cls: `claudian-message claudian-message-${msg.role}`,
@@ -280,8 +285,19 @@ export class MessageRenderer {
 
   private hasVisibleContent(msg: ChatMessage): boolean {
     if (msg.content && msg.content.trim().length > 0) return true;
-    if (msg.toolCalls && msg.toolCalls.length > 0) return true;
-    if (msg.contentBlocks && msg.contentBlocks.length > 0) return true;
+    if (msg.contentBlocks && msg.contentBlocks.length > 0) {
+      for (const block of msg.contentBlocks) {
+        if (block.type === 'thinking' && block.content.trim().length > 0) return true;
+        if (block.type === 'text' && block.content.trim().length > 0) return true;
+        if (block.type === 'context_compacted') return true;
+        if (block.type === 'subagent') return true;
+        if (block.type === 'tool_use') {
+          const toolCall = msg.toolCalls?.find(tc => tc.id === block.toolId);
+          if (toolCall && this.shouldRenderToolCall(toolCall)) return true;
+        }
+      }
+    }
+    if (msg.toolCalls?.some(toolCall => this.shouldRenderToolCall(toolCall))) return true;
     return false;
   }
 
@@ -388,11 +404,8 @@ export class MessageRenderer {
    * and Codex collab agent lifecycle tools.
    */
   private renderToolCall(contentEl: HTMLElement, toolCall: ToolCallInfo, msg?: ChatMessage): void {
+    if (!this.shouldRenderToolCall(toolCall)) return;
     const subagentLifecycleAdapter = this.getSubagentLifecycleAdapter(toolCall.name);
-
-    // Skip invisible internal tools
-    if (toolCall.name === TOOL_AGENT_OUTPUT) return;
-    if (subagentLifecycleAdapter?.isHiddenTool(toolCall.name)) return;
 
     if (isWriteEditTool(toolCall.name)) {
       renderStoredWriteEdit(contentEl, toolCall);
@@ -403,6 +416,21 @@ export class MessageRenderer {
     } else {
       renderStoredToolCall(contentEl, toolCall);
     }
+  }
+
+  private shouldRenderToolCall(toolCall: ToolCallInfo): boolean {
+    if (toolCall.name === TOOL_AGENT_OUTPUT) return false;
+    if (toolCall.name === TOOL_WRITE_STDIN && this.isSilentWriteStdinTool(toolCall)) return false;
+    if (toolCall.name === 'custom_tool_call_output') return false;
+
+    const subagentLifecycleAdapter = this.getSubagentLifecycleAdapter(toolCall.name);
+    if (subagentLifecycleAdapter?.isHiddenTool(toolCall.name)) return false;
+
+    return true;
+  }
+
+  private isSilentWriteStdinTool(toolCall: ToolCallInfo): boolean {
+    return typeof toolCall.input.chars !== 'string' || toolCall.input.chars.length === 0;
   }
 
   private renderTaskSubagent(
@@ -791,13 +819,35 @@ export class MessageRenderer {
     btn.setAttribute('aria-label', t('chat.rewind.ariaLabel'));
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      runRendererAction(async () => {
-        try {
-          await this.rewindCallback?.(messageId);
-        } catch (err) {
-          new Notice(t('chat.rewind.failed', { error: err instanceof Error ? err.message : 'Unknown error' }));
-        }
-      });
+      this.showRewindMenu(e, messageId);
+    });
+  }
+
+  private showRewindMenu(event: MouseEvent, messageId: string): void {
+    const menu = new Menu();
+    this.addRewindMenuItem(menu, messageId, 'conversation');
+    this.addRewindMenuItem(menu, messageId, 'code-and-conversation');
+    menu.showAtMouseEvent(event);
+  }
+
+  private addRewindMenuItem(menu: Menu, messageId: string, mode: ChatRewindMode): void {
+    menu.addItem((item) => {
+      item
+        .setTitle(
+          mode === 'conversation'
+            ? t('chat.rewind.menuConversationOnly')
+            : t('chat.rewind.menuCodeAndConversation')
+        )
+        .setIcon(mode === 'conversation' ? 'message-square' : 'rotate-ccw')
+        .onClick(() => {
+          runRendererAction(async () => {
+            try {
+              await this.rewindCallback?.(messageId, mode);
+            } catch (err) {
+              new Notice(t('chat.rewind.failed', { error: err instanceof Error ? err.message : 'Unknown error' }));
+            }
+          });
+        });
     });
   }
 

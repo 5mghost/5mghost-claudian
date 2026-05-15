@@ -1,5 +1,5 @@
 import type { Component } from 'obsidian';
-import { Notice } from 'obsidian';
+import { Notice, Platform } from 'obsidian';
 
 import { getHiddenProviderCommandSet } from '../../../core/providers/commands/hiddenCommands';
 import type { ProviderCommandDropdownConfig } from '../../../core/providers/commands/ProviderCommandCatalog';
@@ -20,7 +20,7 @@ import {
 import type { ChatRuntime } from '../../../core/runtime/ChatRuntime';
 import type { AutoTurnResult } from '../../../core/runtime/types';
 import { TOOL_AGENT_OUTPUT } from '../../../core/tools/toolNames';
-import type { ChatMessage, Conversation, StreamChunk } from '../../../core/types';
+import type { ChatMessage, ClaudianSettings, Conversation, StreamChunk } from '../../../core/types';
 import { t } from '../../../i18n/i18n';
 import type ClaudianPlugin from '../../../main';
 import { SlashCommandDropdown } from '../../../shared/components/SlashCommandDropdown';
@@ -169,6 +169,25 @@ function getTabHiddenCommands(
   );
 }
 
+function shouldSendMessageFromEnterKey(
+  e: KeyboardEvent,
+  settings: Pick<ClaudianSettings, 'requireCommandOrControlEnterToSend'>,
+): boolean {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing) {
+    return false;
+  }
+
+  if (settings.requireCommandOrControlEnterToSend !== true) {
+    return true;
+  }
+
+  if (Platform.isMacOS) {
+    return e.metaKey === true && !e.ctrlKey && !e.altKey;
+  }
+
+  return e.ctrlKey === true && !e.metaKey && !e.altKey;
+}
+
 type ProviderCatalogInfo = {
   config: ProviderCommandDropdownConfig;
   getEntries: () => Promise<ProviderCommandEntry[]>;
@@ -279,12 +298,16 @@ function syncTabProviderServices(
 ): void {
   tab.services.instructionRefineService?.cancel();
   tab.services.instructionRefineService?.resetConversation();
-  tab.services.titleGenerationService?.cancel();
   tab.services.instructionRefineService = ProviderRegistry.createInstructionRefineService(plugin, tab.providerId);
-  tab.services.titleGenerationService = ProviderRegistry.createTitleGenerationService(plugin, tab.providerId);
   tab.services.subagentManager.setTaskResultInterpreter?.(
     ProviderRegistry.getTaskResultInterpreter(tab.providerId)
   );
+}
+
+function ensureTitleGenerationService(tab: TabData, plugin: ClaudianPlugin): void {
+  if (!tab.services.titleGenerationService) {
+    tab.services.titleGenerationService = ProviderRegistry.createTitleGenerationService(plugin);
+  }
 }
 
 function cleanupTabRuntime(tab: TabData): void {
@@ -682,6 +705,7 @@ function initializeInstructionAndTodo(tab: TabData, plugin: ClaudianPlugin): voi
   const { dom } = tab;
 
   syncTabProviderServices(tab, plugin);
+  ensureTitleGenerationService(tab, plugin);
   tab.ui.instructionModeManager = new InstructionModeManagerClass(
     dom.inputEl,
     {
@@ -1187,7 +1211,7 @@ export function initializeTabControllers(
     plugin,
     component,
     dom.messagesEl,
-    (id) => tab.controllers.conversationController!.rewind(id),
+    (id, mode) => tab.controllers.conversationController!.rewind(id, mode),
     forkRequestCallback
       ? (id) => handleForkRequest(tab, plugin, id, forkRequestCallback)
       : undefined,
@@ -1462,7 +1486,7 @@ export function wireTabInputEvents(tab: TabData, plugin: ClaudianPlugin): void {
       return;
     }
 
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    if (shouldSendMessageFromEnterKey(e, plugin.settings)) {
       e.preventDefault();
       void controllers.inputController?.sendMessage();
     }
